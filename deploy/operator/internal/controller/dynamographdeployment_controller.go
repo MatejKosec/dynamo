@@ -145,7 +145,7 @@ func (r *DynamoGraphDeploymentReconciler) Reconcile(ctx context.Context, req ctr
 			Status:             readyStatus,
 			Reason:             string(reason),
 			Message:            string(message),
-			LastTransitionTime: metav1.Now(),
+
 		})
 
 		// Only set ObservedGeneration when reconciliation succeeded (no error),
@@ -472,7 +472,7 @@ func (r *DynamoGraphDeploymentReconciler) propagateTopologyCondition(ctx context
 			Status:             metav1.ConditionUnknown,
 			Reason:             nvidiacomv1alpha1.ConditionReasonTopologyConditionPending,
 			Message:            "Waiting for topology condition from the scheduling framework",
-			LastTransitionTime: metav1.Now(),
+
 		}
 	} else if groveTopoCond.Status == metav1.ConditionTrue {
 		// Grove reports topology levels are unavailable.
@@ -485,7 +485,7 @@ func (r *DynamoGraphDeploymentReconciler) propagateTopologyCondition(ctx context
 			Status:             metav1.ConditionFalse,
 			Reason:             reason,
 			Message:            groveTopoCond.Message,
-			LastTransitionTime: metav1.Now(),
+
 		}
 		prev := meta.FindStatusCondition(dgd.Status.Conditions, nvidiacomv1alpha1.ConditionTypeTopologyLevelsAvailable)
 		if prev == nil || prev.Status != metav1.ConditionFalse || prev.Reason != reason || prev.Message != groveTopoCond.Message {
@@ -499,7 +499,7 @@ func (r *DynamoGraphDeploymentReconciler) propagateTopologyCondition(ctx context
 			Status:             metav1.ConditionTrue,
 			Reason:             nvidiacomv1alpha1.ConditionReasonAllTopologyLevelsAvailable,
 			Message:            "All required topology levels are available in the cluster topology",
-			LastTransitionTime: metav1.Now(),
+
 		}
 	}
 
