@@ -980,6 +980,21 @@ mod tests {
         scores.scores.get(&worker).copied()
     }
 
+    async fn normalized_scores(
+        index: &BranchShardedIndexer<ConcurrentRadixTreeCompressed>,
+        query: &[u64],
+    ) -> Vec<(WorkerWithDpRank, u32)> {
+        let mut scores: Vec<_> = index
+            .find_matches(local_hashes(query))
+            .await
+            .unwrap()
+            .scores
+            .into_iter()
+            .collect();
+        scores.sort_by_key(|(worker, score)| (worker.worker_id, worker.dp_rank, *score));
+        scores
+    }
+
     #[tokio::test]
     async fn linear_chain_inherits_parent_and_caps_construction() {
         let index = make_indexer(2, 4);
@@ -1441,5 +1456,46 @@ mod tests {
         index.apply_event(clear_event(0)).await;
         let after_clear = index.find_matches(local_hashes(&[1, 2])).await.unwrap();
         assert!(after_clear.scores.is_empty());
+    }
+
+    #[tokio::test]
+    async fn dump_replay_preserves_query_scores() {
+        let index = make_indexer(2, 3);
+        index.apply_event(store_event(0, &[1, 2, 3, 4])).await;
+        index.apply_event(store_event(1, &[1, 2, 5, 6])).await;
+        index.apply_event(store_event(2, &[7, 8])).await;
+        index
+            .apply_event(remove_hash_event(1, 0, &[1, 2, 5, 6], 3))
+            .await;
+        index.flush().await;
+
+        let queries = [
+            &[1, 2, 3, 4][..],
+            &[1, 2, 5, 6],
+            &[1, 2, 9],
+            &[7, 8],
+            &[7, 8, 9],
+        ];
+        let mut expected = Vec::with_capacity(queries.len());
+        for query in &queries {
+            expected.push(normalized_scores(&index, query).await);
+        }
+
+        let dumped = index.dump_events().await.unwrap();
+        assert!(!dumped.is_empty());
+
+        let restored = make_indexer(2, 3);
+        for event in dumped {
+            restored.apply_event(event).await;
+        }
+        restored.flush().await;
+
+        for (query, expected_scores) in queries.iter().zip(expected.iter()) {
+            assert_eq!(
+                normalized_scores(&restored, query).await,
+                *expected_scores,
+                "dump replay changed scores for query {query:?}"
+            );
+        }
     }
 }
