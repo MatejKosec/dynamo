@@ -52,9 +52,8 @@ pub use config::{
     SharedCacheType,
 };
 pub use indexer::{
-    AnchorAwareBranchShardedIndexer, AnchorRef, AnchorTask, BranchShardedIndexer,
-    LowerTierContinuation, LowerTierIndexer, MaybeError, SharedKvCache, SyncIndexer,
-    ThreadPoolIndexer,
+    AnchorRef, AnchorTask, BranchShardedIndexer, LowerTierContinuation, LowerTierIndexer,
+    MaybeError, SharedKvCache, SyncIndexer, ThreadPoolIndexer,
 };
 pub use nested_map::PositionalIndexer;
 pub use protocols::{
