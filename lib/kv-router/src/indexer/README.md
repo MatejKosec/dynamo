@@ -347,7 +347,7 @@ let workers_at_128 = index.get(&(128, local_hashes[128]));  // O(1) lookup
 
 ## Indexer Selection Guide
 
-There are five main production indexer shapes. This section maps deployment scenarios to the right choice.
+There are four main production indexer shapes. This section maps deployment scenarios to the right choice.
 
 ### Variant Summary
 
@@ -356,7 +356,6 @@ There are five main production indexer shapes. This section maps deployment scen
 | `RadixTree` | `RadixTree` | Single-threaded | N/A (local) | Worker-side `LocalKvIndexer`, unit tests |
 | `ConcurrentRadixTree` (CRT) | `ConcurrentRadixTree` | Thread-safe reads | N/A (local) | Single-node, moderate traffic |
 | `ThreadPoolIndexer<CRT>` (CRTC) | `ThreadPoolIndexer<ConcurrentRadixTree>` | N write threads + inline reads | Full-mesh, all workers | Default for most deployments |
-| `ThreadPoolIndexer<PositionalIndexer>` (NestedMap) | `ThreadPoolIndexer<PositionalIndexer>` | N write threads + inline reads | Full-mesh, position-first | Position-map experiments and jump-search workloads |
 | `BranchShardedIndexer<CRTC>` (BSI) | `BranchShardedIndexer<ThreadPoolIndexer<CRT>>` | Sharded write pools | Prefix TRIE + anchors | High worker counts, correctness-first sharding |
 
 ### When to use each
@@ -376,11 +375,6 @@ There are five main production indexer shapes. This section maps deployment scen
 - Works well up to ~1 000 workers. Above that, `find_matches` p99 climbs because every query scans all workers.
 - Does not shard; a single hot branch can become a write bottleneck at extreme scale.
 
-**`ThreadPoolIndexer<PositionalIndexer>` (NestedMap)**
-- Use when you want a position-first index and jump-search behavior instead of tree traversal.
-- Works best when engine sequence hashes are available or reproducible by the router.
-- Does not shard; like CRTC, every lookup considers the global worker set.
-
 **`BranchShardedIndexer<CRTC>` (BSI)**
 - Uses a bounded routing TRIE. Router-owned nodes track live workers for shallow reads, and deeper suffixes are dispatched to one shard through explicit backend anchors.
 - Before dispatching a continuation across the routing-depth boundary, BSI pre-installs the parent anchor on the target shard so the CRTC already has the parent chain at lookup time.
@@ -398,7 +392,7 @@ Start
   │      └─ RadixTree
   │
   ├─ < ~1 000 workers, no sharding needed?
-  │      └─ CRTC by default, or NestedMap for position-first experiments
+  │      └─ CRTC (ThreadPoolIndexer<ConcurrentRadixTree>)
   │
   └─ ≥ ~1 000 workers or need one-shard lookups?
          │

@@ -231,8 +231,9 @@ Trace: `mooncake_trace.jsonl` (Mooncake FAST25 arxiv trace). Config: 2 shards ×
 |---------|---------------|-----|-----------------|-------------|-----------|
 | CRTC baseline (8w) | 17,201 | 1,093 µs | — | — | — |
 | Branch-sharded depth=2 (2×4w) | 17,064 | 1,510 µs | 91.3% dispatched / 8.7% shallow | 388 µs | 161 µs |
+| Branch-sharded depth=4 (2×4w) | 16,939 | 5,263 µs | 86.1% dispatched / 13.9% shallow | 678 µs | 244 µs |
 
-Both indexers keep up with the offered trace rate. On this hot-prefix arxiv trace, branch-sharded routing is slower than CRTC in steady-state p99 because the routing TRIE does materially more work before dispatch and the stored block load collapses almost entirely onto one shard.
+All listed configs keep up with the offered trace rate. On this hot-prefix arxiv trace, branch-sharded routing is slower than CRTC in steady-state p99 because the routing TRIE does materially more work before dispatch and the stored block load collapses almost entirely onto one shard.
 
 The true-miss rate remains effectively zero in these runs.
 
@@ -243,6 +244,7 @@ The routing TRIE provides a structural routing model that keeps shallow router s
 Shard block distribution:
 ```text
 branch depth=2:  shard 0: 574 blocks (0.0%), 14 workers  shard 1: 2,094,155 blocks (100.0%), 7,000 workers
+branch depth=4:  shard 0: 80,570 blocks (4.0%), 3,983 workers  shard 1: 1,922,501 blocks (96.0%), 7,000 workers
 ```
 
 See Known Issues below for the current hot-branch collapse behavior.
@@ -290,7 +292,20 @@ Full sweep data:
 
 ### Worker scaling — branch-sharded depth=2
 
-Regenerate this table after changing the sharding policy or hot-branch splitting behavior. `--trace-duplication-factor` duplicates request/hash spaces while keeping the worker identity count fixed; it increases branch diversity and event volume, but it does not multiply the number of worker identities.
+Config: 2 shards × 4 workers per shard, `--num-unique-inference-workers 1000`, `-d 7`, `--benchmark-duration-ms 30000`. `--trace-duplication-factor` duplicates request/hash spaces while keeping the worker identity count fixed; it increases branch diversity and event volume, but it does not multiply the number of worker identities.
+
+| Trace duplication | Achieved / offered ops/s | p99 | Avg routing | Avg shard | Anchor installs / reuses | Block split |
+|------------------:|--------------------------:|----:|------------:|----------:|-------------------------:|-------------|
+| 1× | 17,015 / 17,268 | 3,034 µs | 455 µs | 203 µs | 88,228 / 0 | 0.0% / 100.0% |
+| 2× | 33,554 / 34,536 | 6,383 µs | 515 µs | 297 µs | 176,386 / 14 | 91.9% / 8.1% |
+| 4× ⚠ | 42,596 / 69,073 | 4,916 µs | 451 µs | 258 µs | 352,842 / 28 | 89.7% / 10.3% |
+| 8× ⚠ | 40,695 / 138,147 | 5,489 µs | 473 µs | 280 µs | 705,593 / 98 | 76.6% / 23.4% |
+| 16× ⚠ | 42,607 / 276,295 | 4,630 µs | 454 µs | 259 µs | 1,410,983 / 182 | 82.0% / 18.0% |
+| 32× ⚠ | 35,018 / 552,590 | 5,928 µs | 529 µs | 319 µs | 2,822,050 / 343 | 84.8% / 15.2% |
+
+1× and 2× keep up with the offered load. 4× and higher are overloaded with this 30s window and should be treated as stress-shape data rather than clean capacity.
+
+Duplication increases branch diversity, but it does not reliably balance stored blocks because the hot routing path and branch lifetime skew still dominate. Achieved throughput saturates around 35-43k ops/s in the overloaded rows, and anchor installs scale roughly with event volume.
 
 ### Repeated overload benchmark
 
