@@ -32,6 +32,7 @@ from dynamo.llm import (
     ModelInput,
     ModelRuntimeConfig,
     ModelType,
+    WorkerType,
     fetch_model,
     register_model,
 )
@@ -607,6 +608,8 @@ async def register_vllm_model(
     config: Config,
     engine_client: AsyncLLM,
     vllm_config: VllmConfig,
+    worker_type: WorkerType | None = None,
+    needs: list[list[WorkerType]] | None = None,
 ) -> None:
     """
     Helper function to register a vLLM model with runtime configuration.
@@ -618,6 +621,13 @@ async def register_vllm_model(
         config: Configuration object
         engine_client: vLLM engine client
         vllm_config: vLLM configuration
+        worker_type: The disaggregation role this worker plays
+            (Prefill / Decode / Encode / Aggregated). Required for the
+            frontend's topology readiness check once strict mode lands.
+        needs: Peer worker types required to serve traffic, in DNF form
+            (list of alternative AND-sets). For example, a prefill worker
+            with --route-to-encoder passes
+            ``[[WorkerType.Decode, WorkerType.Encode]]``.
     """
     runtime_config = ModelRuntimeConfig()
 
@@ -699,6 +709,8 @@ async def register_vllm_model(
         custom_template_path=config.custom_jinja_template,
         media_decoder=media_decoder,
         media_fetcher=media_fetcher,
+        worker_type=worker_type,
+        needs=needs,
     )
 
 

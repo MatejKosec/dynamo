@@ -21,7 +21,7 @@ from dynamo.common.utils.prometheus import (
     LLMBackendMetrics,
     register_embedding_cache_metrics,
 )
-from dynamo.llm import ModelInput, ModelType
+from dynamo.llm import ModelInput, ModelType, WorkerType
 from dynamo.runtime import DistributedRuntime
 
 from .args import Config
@@ -393,6 +393,20 @@ class WorkerFactory:
                 bench_cfg, vllm_config
             )
 
+        # Topology readiness role.
+        # _create_decode_worker handles both DECODE and AGGREGATED disaggregation modes.
+        # `--route-to-encoder` adds Encode to the AND-set of required peers.
+        if config.disaggregation_mode == DisaggregationMode.DECODE:
+            worker_type = WorkerType.Decode
+            needs_set: list[WorkerType] = [WorkerType.Prefill]
+        else:
+            # AGGREGATED
+            worker_type = WorkerType.Aggregated
+            needs_set = []
+        if config.route_to_encoder:
+            needs_set.append(WorkerType.Encode)
+        needs: list[list[WorkerType]] = [needs_set] if needs_set else []
+
         await self.register_vllm_model(
             model_input,
             model_type,
@@ -400,6 +414,8 @@ class WorkerFactory:
             config,
             engine_client,
             vllm_config,
+            worker_type=worker_type,
+            needs=needs,
         )
 
         health_check_payload = VllmHealthCheckPayload(
@@ -593,10 +609,14 @@ class WorkerFactory:
         )
         shutdown_endpoints[:] = [generate_endpoint, clear_endpoint, perf_endpoint]
 
-        # Register prefill model with ModelType.Prefill
+        # Register prefill model with ModelType.Prefill (the legacy bit that
+        # gates prefill-side routing) and the topology readiness role.
         model_input = (
             ModelInput.Text if config.use_vllm_tokenizer else ModelInput.Tokens
         )
+        needs_set: list[WorkerType] = [WorkerType.Decode]
+        if config.route_to_encoder:
+            needs_set.append(WorkerType.Encode)
         await self.register_vllm_model(
             model_input,
             ModelType.Prefill,
@@ -604,6 +624,8 @@ class WorkerFactory:
             config,
             engine_client,
             vllm_config,
+            worker_type=WorkerType.Prefill,
+            needs=[needs_set],
         )
 
         health_check_payload = VllmPrefillHealthCheckPayload(
