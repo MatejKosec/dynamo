@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Range;
 use std::time::Duration;
@@ -180,6 +181,26 @@ pub trait WorkerConfigLike {
     fn data_parallel_size(&self) -> u32;
     fn max_num_batched_tokens(&self) -> Option<u64>;
     fn total_kv_blocks(&self) -> Option<u64>;
+
+    /// Returns the worker's topology domain labels (e.g. {"zone": "us-east-1a", "rack": "rack1"}).
+    /// Used by topology-aware routing to constrain KV cache transfers within a topology domain.
+    /// Returns `None` by default for backward compatibility.
+    fn topology_domains(&self) -> Option<&HashMap<String, String>> {
+        None
+    }
+
+    /// Returns the topology domain to enforce for KV-cache transfers (e.g. "zone").
+    /// When set, decode worker selection is constrained to workers sharing the same
+    /// topology domain value as the prefill worker.
+    fn kv_transfer_domain(&self) -> Option<&str> {
+        None
+    }
+
+    /// Returns the policy when no decode workers share the prefill worker's topology domain.
+    /// "fail" (default) = return error; "fallback" = allow cross-domain transfer.
+    fn kv_transfer_no_match_policy(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// Transport abstraction for publishing batched router-visible KV cache events.
@@ -1343,6 +1364,40 @@ mod tests {
         assert_eq!(hits.hits_beyond(6), 2);
         // from_position=8 => nothing
         assert_eq!(hits.hits_beyond(8), 0);
+    }
+
+    #[test]
+    fn test_worker_config_like_topology_domains_default() {
+        // A minimal implementor that does NOT override topology_domains()
+        struct MinimalConfig;
+        impl WorkerConfigLike for MinimalConfig {
+            fn data_parallel_start_rank(&self) -> u32 {
+                0
+            }
+            fn data_parallel_size(&self) -> u32 {
+                1
+            }
+            fn max_num_batched_tokens(&self) -> Option<u64> {
+                None
+            }
+            fn total_kv_blocks(&self) -> Option<u64> {
+                None
+            }
+        }
+
+        let config = MinimalConfig;
+        assert!(
+            config.topology_domains().is_none(),
+            "Default topology_domains() should return None"
+        );
+        assert!(
+            config.kv_transfer_domain().is_none(),
+            "Default kv_transfer_domain() should return None"
+        );
+        assert!(
+            config.kv_transfer_no_match_policy().is_none(),
+            "Default kv_transfer_no_match_policy() should return None"
+        );
     }
 
     #[test]
