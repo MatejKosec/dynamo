@@ -193,8 +193,7 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
     # vllm/sglang qwen3_coder.batch.5 both recover to the same call as
     # Dynamo and match the new expected — intentionally NOT registered.
     # PARSER.batch.5 sub-cases — recovery contract (impl-defined; see PARSER_CASES.md).
-    # vllm divergences from harness; sglang .a inherited from prior bare-key registry,
-    # additional sglang .b/.c entries to be added as CI surfaces them.
+    # glm47 intentionally omitted: matches upstream (drop on missing end-token).
     ("vllm", "deepseek_v3", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "deepseek_v3", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
     ("vllm", "deepseek_v3_1", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
@@ -203,8 +202,6 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
     ("vllm", "deepseek_v3_2", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
     ("vllm", "deepseek_v4", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "deepseek_v4", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
-    ("vllm", "glm47", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
-    ("vllm", "glm47", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
     ("vllm", "jamba", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "llama3_json", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "llama3_json", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
@@ -217,13 +214,11 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
     ("vllm", "qwen3_coder", "PARSER.batch.5.b"): _RECOVERY_CONTRACT,
     ("sglang", "deepseek_v3", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "deepseek_v3_1", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
-    ("sglang", "glm47", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "harmony", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "minimax_m2", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "mistral", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "qwen25", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     # PARSER.batch.4 sub-cases — malformed/partial JSON args; recovery contract impl-defined.
-    # vllm divergences from harness; sglang provisional .a entries inherited from prior bare-key set.
     ("vllm", "deepseek_v3", "PARSER.batch.4.a"): _RECOVERY_CONTRACT,
     ("vllm", "deepseek_v3", "PARSER.batch.4.b"): _RECOVERY_CONTRACT,
     ("vllm", "deepseek_v3", "PARSER.batch.4.c"): _RECOVERY_CONTRACT,
@@ -258,10 +253,6 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
     ("vllm", "qwen3_coder", "PARSER.batch.4.a"): _RECOVERY_CONTRACT,
     ("sglang", "harmony", "PARSER.batch.4.a"): _RECOVERY_CONTRACT,
     # PARSER.batch.2 sub-cases — multi-call shape variations.
-    # .c (with surrounding narration): same trailing-space-vs-trim divergence
-    # as batch.8.c on most XML/JSON families. .b (multi-section back-to-back):
-    # vLLM's deepseek_v3_2/v4 parsers don't restart on second tool_calls fence.
-    # llama3_json across .a/.c/.d: semicolon-separated parsing differs.
     (
         "vllm",
         "deepseek_v3_2",

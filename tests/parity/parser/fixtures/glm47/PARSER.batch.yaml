@@ -29,6 +29,14 @@ cases:
     expected:
       calls: []
       normal_text: Hello, how can I help you today?
+  PARSER.batch.5:
+    description: Missing </tool_call> end marker — drop to match upstream vLLM/SGLang
+    model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value>
+    tools:
+    - *id001
+    expected:
+      calls: []
+      normal_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value>
   PARSER.batch.9:
     description: Empty input
     model_text: ''
