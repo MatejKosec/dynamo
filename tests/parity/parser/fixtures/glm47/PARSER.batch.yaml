@@ -37,6 +37,28 @@ cases:
     expected:
       calls: []
       normal_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value>
+  PARSER.batch.5.d:
+    description: Multi-call, last call missing only </tool_call> end marker (body complete). Ajay's GLM-5.1 prod repro shape.
+    model_text: I'll start by fetching the weather for both Boston and New York at the same time!<tool_call>get_weather<arg_key>location</arg_key><arg_value>Boston</arg_value></tool_call><tool_call>get_weather<arg_key>location</arg_key><arg_value>New York</arg_value>
+    tools:
+    - *id001
+    expected:
+      calls:
+      - name: get_weather
+        arguments:
+          location: Boston
+      normal_text: I'll start by fetching the weather for both Boston and New York at the same time!<tool_call>get_weather<arg_key>location</arg_key><arg_value>New York</arg_value>
+  PARSER.batch.5.e:
+    description: Multi-call, last call truncated mid-arg-value. Ajay's GLM-5.1 prod leak shape.
+    model_text: I'll start by fetching the weather for both Boston and New York at the same time!<tool_call>get_weather<arg_key>location</arg_key><arg_value>Boston</arg_value></tool_call><tool_call>get_weather<arg_key>location</arg_key><arg_value>New York
+    tools:
+    - *id001
+    expected:
+      calls:
+      - name: get_weather
+        arguments:
+          location: Boston
+      normal_text: I'll start by fetching the weather for both Boston and New York at the same time!<tool_call>get_weather<arg_key>location</arg_key><arg_value>New York
   PARSER.batch.9:
     description: Empty input
     model_text: ''

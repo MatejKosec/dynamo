@@ -792,6 +792,10 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
         "kimi_k2",
         "PARSER.batch.8.d",
     ): "TODO(research): SGLang diverges on this case; investigate vs Dynamo's expected",
+    # glm47 5.d / 5.e — multi-call truncation. Dynamo and SGLang both
+    # surface the raw 2nd block in normal_text; vLLM drops it.
+    ("vllm", "glm47", "PARSER.batch.5.d"): _RECOVERY_CONTRACT,
+    ("vllm", "glm47", "PARSER.batch.5.e"): _RECOVERY_CONTRACT,
 }
 
 
@@ -799,8 +803,8 @@ def _case_sort_key(case_id: str) -> tuple[int, str]:
     """Sort key for case IDs that may carry a sub-letter.
 
     `PARSER.batch.5`   → (5, "")
+    `PARSER.batch.5.d` → (5, "d")
     `PARSER.batch.8.a` → (8, "a")
-    `PARSER.batch.8.b` → (8, "b")
     """
     parts = case_id.split(".")
     top = int(parts[2])
