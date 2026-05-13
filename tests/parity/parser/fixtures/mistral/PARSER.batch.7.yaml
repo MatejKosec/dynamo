@@ -25,8 +25,8 @@ cases:
       - name: book_flight
         arguments:
           destination: Paris
-          first_class: true
           passengers: 2
+          first_class: true
       normal_text: ''
   PARSER.batch.7.b:
     description: Unicode + escaped chars

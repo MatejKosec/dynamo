@@ -41,14 +41,11 @@ cases:
     tools:
     - *id001
     expected:
-      calls: []
-      normal_text: |-
-        <function=get_weather>
-        <parameter=location>
-        NYC
-        </parameter>
-        </function>
-        </tool_call>
+      calls:
+      - name: get_weather
+        arguments:
+          location: NYC
+      normal_text: ''
   PARSER.batch.5.c:
     description: Truncation mid-parameter value
     ref: dynamo

@@ -208,18 +208,45 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
     ("vllm", "jamba", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "llama3_json", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "llama3_json", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
-    ("vllm", "minimax_m2", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
-    ("vllm", "minimax_m2", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
+    # minimax_m2 5.a/5.c removed: now match vLLM (both `[]`) — Dynamo's
+    # strict_match (per MiniMax spec) drops the inner recovery that
+    # previously produced `[get_weather(NYC)]`.
     ("vllm", "mistral", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
     ("vllm", "phi4", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("vllm", "phi4", "PARSER.batch.5.b"): _RECOVERY_CONTRACT,
     ("vllm", "phi4", "PARSER.batch.5.c"): _RECOVERY_CONTRACT,
-    ("vllm", "qwen3_coder", "PARSER.batch.5.b"): _RECOVERY_CONTRACT,
+    # qwen3_coder 5.b removed: `backoff_when_no_wrapper` recovers the call
+    # from `<function=...>` even without `<tool_call>`, matching vLLM.
     ("sglang", "deepseek_v3", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "deepseek_v3_1", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "glm47", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "harmony", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
-    ("sglang", "minimax_m2", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
+    # sglang/minimax_m2/5.a removed: matches Dynamo (both `[]`) now that
+    # Dynamo enforces strict_match per MiniMax-M2 spec.
+    # sglang/minimax_m2/4.d: SGLang's MinimaxM2Detector recovers a call when
+    # `</invoke>` is missing (regex `|$` fallback) — contradicts MiniMax-M2
+    # reference parser which requires both inner fences.
+    (
+        "sglang",
+        "minimax_m2",
+        "PARSER.batch.4.d",
+    ): "SGLang's MinimaxM2Detector recovers when `</invoke>` is missing; MiniMax-M2 spec requires paired fences (Dynamo is strict_match per spec)",
+    # sglang/qwen3_coder/4.a: SGLang drops the raw wrapper from normal_text;
+    # Qwen3-Coder reference parser returns the raw input as content
+    # (passthrough) when no `<function=...>` is present in input.
+    (
+        "sglang",
+        "qwen3_coder",
+        "PARSER.batch.4.a",
+    ): "SGLang's Qwen3CoderDetector drops normal_text when no `<function=>` is inside; Qwen3-Coder reference parser passes through the raw input as content",
+    # sglang/qwen3_coder/5.b: SGLang does not back-off when `<tool_call>` is
+    # absent but `<function=...>` is present; Qwen3-Coder reference parser's
+    # `_get_function_calls` treats the whole input as a tool body in that case.
+    (
+        "sglang",
+        "qwen3_coder",
+        "PARSER.batch.5.b",
+    ): "SGLang's Qwen3CoderDetector does not back-off to whole-input parsing when `<tool_call>` is missing but `<function=>` is present; Qwen3-Coder reference parser does",
     ("sglang", "mistral", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     ("sglang", "qwen25", "PARSER.batch.5.a"): _RECOVERY_CONTRACT,
     # PARSER.batch.4 sub-cases — malformed/partial JSON args; recovery contract impl-defined.
@@ -255,7 +282,9 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
     ): "EXPECTS_ERROR(KeyError): vLLM mistral_tool_parser raises KeyError when 'name' key is missing",
     ("vllm", "phi4", "PARSER.batch.4.c"): _RECOVERY_CONTRACT,
     ("vllm", "phi4", "PARSER.batch.4.d"): _RECOVERY_CONTRACT,
-    ("vllm", "qwen3_coder", "PARSER.batch.4.a"): _RECOVERY_CONTRACT,
+    # qwen3_coder 4.a removed: `passthrough_when_no_function` now echoes the
+    # raw wrapper when no `<function=...>` is inside, matching Qwen3-Coder
+    # reference parser and vLLM.
     ("sglang", "harmony", "PARSER.batch.4.a"): _RECOVERY_CONTRACT,
     # PARSER.batch.2 sub-cases — multi-call shape variations.
     # .c (with surrounding narration): same trailing-space-vs-trim divergence
@@ -495,11 +524,8 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
         "minimax_m2",
         "PARSER.batch.2.c",
     ): "trims trailing space from preceding normal_text",
-    (
-        "sglang",
-        "minimax_m2",
-        "PARSER.batch.5.c",
-    ): "sglang nullifies normal_text on malformed/recovery shapes where Dynamo preserves input",
+    # sglang/minimax_m2/5.c removed: Dynamo now also returns the raw input
+    # as normal_text under strict_match (no inner recovery), matching SGLang.
     (
         "sglang",
         "mistral",

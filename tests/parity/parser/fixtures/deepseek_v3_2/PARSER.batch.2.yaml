@@ -9,7 +9,6 @@ cases:
   PARSER.batch.2.a:
     description: Two invokes inside one function_calls wrapper
     ref: originated from https://github.com/vllm-project/vllm/blob/b53c507bc91f87e28b03e9b54bbff7c76e97d58b/tests/tool_parsers/test_deepseekv32_tool_parser.py#L172
-    # `|-` = literal block scalar, strip trailing newline (multi-line text as-is)
     model_text: |-
       <｜DSML｜function_calls>
       <｜DSML｜invoke name="get_weather">
@@ -20,7 +19,6 @@ cases:
       </｜DSML｜invoke>
       </｜DSML｜function_calls>
     tools:
-    # `&idN` defines an anchor; `*idN` below reuses the same tool def
     - &id001
       name: get_weather
       parameters:
@@ -69,7 +67,6 @@ cases:
       - name: get_time
         arguments:
           timezone: EST
-      # `|2+` below = "\n" (see file header)
       normal_text: |2+
 
     # TODO(research): vllm diverges — vLLM deepseek_v3_2 does not restart parsing on a second back-to-back fence pair

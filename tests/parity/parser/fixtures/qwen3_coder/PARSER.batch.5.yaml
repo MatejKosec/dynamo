@@ -41,18 +41,11 @@ cases:
     tools:
     - *id001
     expected:
-      calls: []
-      normal_text: |-
-        <function=get_weather>
-        <parameter=location>
-        NYC
-        </parameter>
-        </function>
-        </tool_call>
-    # TODO(research): vllm diverges — impl-defined recovery contract (see PARSER_CASES.md)
-    # vllm produces:
-    #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}]
-    #   normal_text: None
+      calls:
+      - name: get_weather
+        arguments:
+          location: NYC
+      normal_text: ''
   PARSER.batch.5.c:
     description: Truncation mid-parameter value
     ref: dynamo

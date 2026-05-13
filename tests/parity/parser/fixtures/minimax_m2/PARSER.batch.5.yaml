@@ -21,15 +21,12 @@ cases:
           location:
             type: string
     expected:
-      calls:
-      - name: get_weather
-        arguments:
-          location: NYC
-      normal_text: ''
-    # TODO(research): vllm diverges — impl-defined recovery contract (see PARSER_CASES.md)
-    # vllm produces:
-    #   calls: []
-    #   normal_text: '<minimax:tool_call>\n<invoke name="get_weather">\n<parameter name="location">NYC</parameter>\n</invoke>'
+      calls: []
+      normal_text: |-
+        <minimax:tool_call>
+        <invoke name="get_weather">
+        <parameter name="location">NYC</parameter>
+        </invoke>
   PARSER.batch.5.b:
     description: Closing </minimax:tool_call> without matching open
     ref: dynamo
@@ -57,12 +54,8 @@ cases:
     tools:
     - *id001
     expected:
-      calls:
-      - name: get_weather
-        arguments:
-          location: NY
-      normal_text: ''
-    # TODO(research): vllm diverges — impl-defined recovery contract (see PARSER_CASES.md)
-    # vllm produces:
-    #   calls: []
-    #   normal_text: '<minimax:tool_call>\n<invoke name="get_weather">\n<parameter name="location">NY'
+      calls: []
+      normal_text: |-
+        <minimax:tool_call>
+        <invoke name="get_weather">
+        <parameter name="location">NY
