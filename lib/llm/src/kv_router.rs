@@ -464,6 +464,7 @@ where
         expected_output_tokens: Option<u32>,
         pinned_worker: Option<WorkerWithDpRank>,
         allowed_worker_ids: Option<HashSet<WorkerId>>,
+        topology_affinity: Option<String>,
     ) -> anyhow::Result<BestMatchDetails> {
         let start = Instant::now();
 
@@ -569,7 +570,7 @@ where
                 pinned_worker,
                 allowed_worker_ids,
                 shared_cache_hits,
-                None, // topology_affinity — wired in PR3b
+                topology_affinity,
             )
             .instrument(tracing::info_span!("kv_router.schedule"))
             .await?;
@@ -645,6 +646,7 @@ where
                 expected_output_tokens,
                 None,
                 allowed_worker_ids,
+                None, // topology_affinity — find_best_match is used for prefill, not decode
             )
             .await?;
         Ok((result.worker, result.cache_hit.rounded_overlap_blocks()))
@@ -653,6 +655,21 @@ where
     /// Register externally-provided workers in the slot tracker.
     pub fn register_workers(&self, worker_ids: &HashSet<WorkerId>) {
         self.scheduler.register_workers(worker_ids);
+    }
+
+    /// Look up a worker's topology domain value for KV transfer routing.
+    /// Reads `kv_transfer_domain` from the worker's own MDC to determine which
+    /// topology level to look up, then returns the worker's value for that domain.
+    /// Returns `None` if the worker has no transfer domain configured or no topology.
+    pub fn topology_affinity_for_worker(&self, worker_id: WorkerId) -> Option<String> {
+        use dynamo_kv_router::WorkerConfigLike;
+        let configs = self.workers_with_configs.borrow();
+        let config = configs.get(&worker_id)?;
+        let domain = config.kv_transfer_domain()?;
+        config
+            .topology_domains()
+            .and_then(|domains| domains.get(domain))
+            .cloned()
     }
 
     #[allow(clippy::too_many_arguments)]

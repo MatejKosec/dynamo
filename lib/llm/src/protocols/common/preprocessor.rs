@@ -63,6 +63,12 @@ pub struct RoutingHints {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<i32>,
 
+    /// Topology affinity value for constraining decode worker selection.
+    /// Set by the prefill router after selecting a prefill worker — the decode
+    /// worker must share the same topology domain value (e.g. zone=us-east-1a).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topology_affinity: Option<String>,
+
     /// Worker IDs provided externally and not discovered by the router.
     /// When set, only workers in this set are considered during scoring.
     #[serde(default, skip_serializing_if = "Option::is_none")]

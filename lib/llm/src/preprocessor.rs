@@ -354,6 +354,7 @@ impl OpenAIPreprocessor {
                 }),
                 priority: hints.and_then(|h| h.priority),
                 lora_name,
+                topology_affinity: None,
                 allowed_worker_ids: None,
                 session_control: nvext.session_control.clone(),
             };

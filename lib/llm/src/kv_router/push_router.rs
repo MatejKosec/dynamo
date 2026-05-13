@@ -302,6 +302,19 @@ impl KvPushRouter {
         let priority_jump = routing.and_then(|r| r.priority_jump).unwrap_or(0.0);
         let expected_output_tokens = routing.and_then(|r| r.expected_output_tokens);
         let allowed_worker_ids = routing.and_then(|r| r.allowed_worker_ids.clone());
+        // Topology affinity: prefer explicit value from routing hints (set by
+        // PrefillRouter), otherwise derive from prefill_worker_id if in Decode phase.
+        let topology_affinity = routing
+            .and_then(|r| r.topology_affinity.clone())
+            .or_else(|| {
+                if phase == RequestPhase::Decode {
+                    routing
+                        .and_then(|r| r.prefill_worker_id)
+                        .and_then(|wid| self.chooser.topology_affinity_for_worker(wid))
+                } else {
+                    None
+                }
+            });
         let (routing_token_ids, block_mm_infos) = request.block_mm_routing_info();
         let Some((pinned_worker_id, requested_dp_rank)) = pinned_worker_hint(phase, routing) else {
             let _nvtx_kv = dynamo_nvtx_range!("route.kv_match");
@@ -318,6 +331,7 @@ impl KvPushRouter {
                     expected_output_tokens,
                     None,
                     allowed_worker_ids,
+                    topology_affinity,
                 )
                 .await?;
             let best_worker = selection.worker;
@@ -374,6 +388,7 @@ impl KvPushRouter {
                     expected_output_tokens,
                     Some(pinned_worker),
                     allowed_worker_ids,
+                    None, // topology_affinity not needed for pinned workers
                 )
                 .await?;
             let best_worker = selection.worker;
