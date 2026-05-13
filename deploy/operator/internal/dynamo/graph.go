@@ -1771,10 +1771,23 @@ func applyDGDTemplateDefaults(
 			{Name: commonconsts.EnvKvTransferNoMatchPolicy, Value: noMatchPolicy},
 		}
 		main.Env = MergeEnvs(policyEnvs, main.Env)
+		// Topology env vars + Downward API volume for label projection
+		main.Env = MergeEnvs(WorkerTopologyEnvVars(kvt), main.Env)
+		main.VolumeMounts = append(main.VolumeMounts, TopologyLabelVolumeMount())
+		podTemplate.Spec.Volumes = appendVolumeIfAbsent(podTemplate.Spec.Volumes, TopologyLabelVolume(kvt))
 	}
 
 	propagateDGDAnnotations(dynamoDeployment.GetAnnotations(), component)
 	propagateDGDSpecMetadata(dynamoDeployment.Spec.Annotations, dynamoDeployment.Spec.Labels, component)
+}
+
+func appendVolumeIfAbsent(volumes []corev1.Volume, vol corev1.Volume) []corev1.Volume {
+	for _, v := range volumes {
+		if v.Name == vol.Name {
+			return volumes
+		}
+	}
+	return append(volumes, vol)
 }
 
 // dgdPropagatedAnnotationKeys lists DGD metadata annotations that are propagated

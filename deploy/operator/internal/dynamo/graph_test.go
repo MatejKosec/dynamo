@@ -9147,3 +9147,105 @@ func TestGeneratePodSpecForComponent_KvTransferPolicyEnvVars(t *testing.T) {
 			"omitted noMatchPolicy should default to fail")
 	})
 }
+
+func TestGeneratePodSpecForComponent_WorkerTopologyEnvVars(t *testing.T) {
+	secretsRetriever := &mockSecretsRetriever{}
+	controllerConfig := &configv1alpha1.OperatorConfiguration{}
+
+	t.Run("worker gets topology env vars and volume", func(t *testing.T) {
+		dgd := &v1beta1.DynamoGraphDeployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-dgd", Namespace: "default"},
+			Spec: v1beta1.DynamoGraphDeploymentSpec{
+				BackendFramework: "vllm",
+				Components: []v1beta1.DynamoComponentDeploymentSharedSpec{
+					{ComponentName: "worker", ComponentType: v1beta1.ComponentTypeWorker},
+				},
+				KvTransferPolicy: &v1beta1.KvTransferPolicy{
+					LabelKey:      "topology.kubernetes.io/zone",
+					Domain:        "zone",
+					NoMatchPolicy: v1beta1.NoMatchPolicyFail,
+				},
+			},
+		}
+		component := dgd.Spec.Components[0].DeepCopy()
+		podSpec, err := GeneratePodSpecForComponent(
+			component, BackendFrameworkVLLM, secretsRetriever, dgd, RoleMain, 1,
+			controllerConfig, commonconsts.MultinodeDeploymentTypeGrove, "worker", nil, nil,
+		)
+		require.NoError(t, err)
+
+		envMap := envVarsToMap(podSpec.Containers[0].Env)
+		assert.Equal(t, "true", envMap[commonconsts.EnvTopologyEnabled])
+		assert.Equal(t, "/etc/dynamo/topology", envMap[commonconsts.EnvTopologyPrefix+"MOUNT_PATH"])
+		assert.Equal(t, "zone", envMap[commonconsts.EnvTopologyPrefix+"DOMAIN"])
+
+		// Downward API volume
+		foundVol := false
+		for _, v := range podSpec.Volumes {
+			if v.Name == "topology-labels" {
+				foundVol = true
+				require.NotNil(t, v.DownwardAPI)
+				require.Len(t, v.DownwardAPI.Items, 1)
+				assert.Equal(t, "zone", v.DownwardAPI.Items[0].Path)
+			}
+		}
+		assert.True(t, foundVol, "topology-labels volume should be present")
+
+		// Volume mount
+		foundMount := false
+		for _, m := range podSpec.Containers[0].VolumeMounts {
+			if m.Name == "topology-labels" {
+				foundMount = true
+				assert.Equal(t, "/etc/dynamo/topology", m.MountPath)
+				assert.True(t, m.ReadOnly)
+			}
+		}
+		assert.True(t, foundMount, "topology-labels mount should be on main container")
+	})
+
+	t.Run("frontend does NOT get topology env vars", func(t *testing.T) {
+		dgd := &v1beta1.DynamoGraphDeployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-dgd", Namespace: "default"},
+			Spec: v1beta1.DynamoGraphDeploymentSpec{
+				BackendFramework: "vllm",
+				Components: []v1beta1.DynamoComponentDeploymentSharedSpec{
+					{ComponentName: "frontend", ComponentType: v1beta1.ComponentTypeFrontend},
+				},
+				KvTransferPolicy: &v1beta1.KvTransferPolicy{
+					LabelKey: "topology.kubernetes.io/zone",
+					Domain:   "zone",
+				},
+			},
+		}
+		component := dgd.Spec.Components[0].DeepCopy()
+		podSpec, err := GeneratePodSpecForComponent(
+			component, BackendFrameworkSGLang, secretsRetriever, dgd, RoleMain, 1,
+			controllerConfig, commonconsts.MultinodeDeploymentTypeGrove, "frontend", nil, nil,
+		)
+		require.NoError(t, err)
+
+		envMap := envVarsToMap(podSpec.Containers[0].Env)
+		assert.NotContains(t, envMap, commonconsts.EnvTopologyEnabled)
+	})
+
+	t.Run("worker without policy has no topology", func(t *testing.T) {
+		dgd := &v1beta1.DynamoGraphDeployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-dgd", Namespace: "default"},
+			Spec: v1beta1.DynamoGraphDeploymentSpec{
+				BackendFramework: "vllm",
+				Components: []v1beta1.DynamoComponentDeploymentSharedSpec{
+					{ComponentName: "worker", ComponentType: v1beta1.ComponentTypeWorker},
+				},
+			},
+		}
+		component := dgd.Spec.Components[0].DeepCopy()
+		podSpec, err := GeneratePodSpecForComponent(
+			component, BackendFrameworkVLLM, secretsRetriever, dgd, RoleMain, 1,
+			controllerConfig, commonconsts.MultinodeDeploymentTypeGrove, "worker", nil, nil,
+		)
+		require.NoError(t, err)
+
+		envMap := envVarsToMap(podSpec.Containers[0].Env)
+		assert.NotContains(t, envMap, commonconsts.EnvTopologyEnabled)
+	})
+}

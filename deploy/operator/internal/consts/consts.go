@@ -84,6 +84,10 @@ const (
 	EnvKvTransferDomain        = "DYN_KV_TRANSFER_DOMAIN"
 	EnvKvTransferNoMatchPolicy = "DYN_KV_TRANSFER_NO_MATCH_POLICY"
 
+	// Topology env vars (worker) — injected when kvTransferPolicy is configured.
+	EnvTopologyEnabled = "DYN_TOPOLOGY_ENABLED"
+	EnvTopologyPrefix  = "DYN_TOPOLOGY_"
+
 	DynamoDeploymentConfigEnvVar      = "DYN_DEPLOYMENT_CONFIG"
 	DynamoNamespaceEnvVar             = "DYN_NAMESPACE"
 	DynamoNamespacePrefixEnvVar       = "DYN_NAMESPACE_PREFIX"
