@@ -9,6 +9,7 @@ and feature gap details.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import sys
@@ -28,6 +29,10 @@ from dynamo.common.utils.input_params import InputParamManager
 from dynamo.llm import ModelInput
 from dynamo.sglang._compat import get_scheduler_info
 from dynamo.sglang.args import parse_args
+
+# Maximum time (seconds) to wait for in-flight requests to drain during shutdown.
+_DRAIN_TIMEOUT_S = 30.0
+_DRAIN_POLL_INTERVAL_S = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +187,42 @@ class SglangLLMEngine(LLMEngine):
         if self.engine is not None:
             self.engine.shutdown()
             logger.info("SGLang engine shutdown")
+
+    async def drain(self) -> None:
+        """Wait for in-flight requests to complete before GPU memory is freed.
+
+        Called by the unified Worker on SIGTERM before cleanup() when this engine
+        is running as a prefill worker in a disaggregated serving pair. Without this
+        step, a decode peer mid-NIXL-pull on this prefiller's KV cache can have its
+        transfer torn down when cleanup() frees GPU memory (issue #9345).
+
+        The timeout is 30 seconds. On timeout, proceed with cleanup — some NIXL
+        transfers may still be in flight but no resource leak results.
+        """
+        if self.engine is None:
+            logger.info("SGLang engine not yet initialized; skipping drain")
+            return
+
+        deadline = asyncio.get_running_loop().time() + _DRAIN_TIMEOUT_S
+        poll_interval = _DRAIN_POLL_INTERVAL_S
+
+        while asyncio.get_running_loop().time() < deadline:
+            try:
+                scheduler = getattr(self.engine.tokenizer_manager, "scheduler", None)
+                if scheduler is not None and scheduler.is_idle():
+                    logger.info("All in-flight SGLang requests drained")
+                    return
+                total = getattr(scheduler, "get_total_usage", lambda: None)() or 0
+                logger.debug("Waiting for SGLang scheduler to drain (usage=%d)", total)
+            except Exception as e:
+                logger.debug("Scheduler poll failed during drain: %s", e)
+            await asyncio.sleep(poll_interval)
+
+        logger.warning(
+            "SGLang drain timeout (%.1fs) reached; proceeding with shutdown. "
+            "Some NIXL transfers may still be in flight.",
+            _DRAIN_TIMEOUT_S,
+        )
 
     def _build_sampling_params(self, request: GenerateRequest) -> dict:
         if not self._use_sglang_tokenizer:
