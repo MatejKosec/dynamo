@@ -91,7 +91,10 @@ def parse(
             error=f"UNAVAILABLE: vLLM has no parser for family={parser_family!r}"
         )
 
-    # Wrap flat tool defs as real `ChatCompletionToolsParam` Pydantic instances
+    # Wrap flat tool defs as real `ChatCompletionToolsParam` Pydantic instances —
+    # vLLM's schema-aware coercion paths gate on `hasattr(config, "type")` and
+    # `hasattr(config.function, "name")`, which the Pydantic model satisfies via
+    # attribute access (plain dicts would silently fall back to raw-string emission).
     wrapped_tools = (
         [
             ChatCompletionToolsParam.model_validate(
