@@ -94,6 +94,32 @@ pub fn try_tool_call_parse_xml(
     config: &XmlParserConfig,
     tools: Option<&[ToolDefinition]>,
 ) -> anyhow::Result<(Vec<ToolCallResponse>, Option<String>)> {
+    // Qwen3-Coder-style passthrough: if the function-start token is absent
+    // anywhere in the input, the reference parser returns the raw input as
+    // content with no tool calls. Gated so it only fires for parsers that
+    // opt in (e.g. qwen3_coder, nemotron_nano); other XML-style families
+    // (minimax_m2, kimi_k2 alias paths) keep their stricter behavior.
+    if config.passthrough_when_no_function
+        && !message.contains(config.function_start_token.as_str())
+    {
+        return Ok((vec![], Some(message.to_string())));
+    }
+
+    // Qwen3-Coder-style back-off: outer `<tool_call>` wrapper missing but
+    // `<function=...>` tags are present in the body. The reference parser
+    // treats the whole input as a single tool-call block (see
+    // qwen3coder_tool_parser._get_function_calls's `raw_tool_calls =
+    // [model_output]` fallback). Only attempt this when the family opts in.
+    if config.backoff_when_no_wrapper
+        && !message.contains(config.tool_call_start_token.as_str())
+        && message.contains(config.function_start_token.as_str())
+    {
+        let calls = parse_tool_call_block(message, config, tools).unwrap_or_default();
+        if !calls.is_empty() {
+            return Ok((calls, Some(String::new())));
+        }
+    }
+
     let (normal_text, tool_calls) = extract_tool_calls(message, config, tools)?;
 
     let normal_content = if normal_text.is_empty() {
@@ -152,6 +178,7 @@ fn extract_tool_calls(
                 let block = &text[abs_start..];
                 let function_start = &config.function_start_token;
                 if config.allow_eof_recovery
+                    && !config.strict_match
                     && block.contains(function_start.as_str())
                     && let Ok(mut parsed_calls) = parse_tool_call_block(block, config, tools)
                     && !parsed_calls.is_empty()
@@ -195,11 +222,25 @@ fn parse_tool_call_block(
     let parameter_start = regex::escape(&config.parameter_start_token);
     let parameter_end = regex::escape(&config.parameter_end_token);
 
-    let function_pattern = format!(r"(?s){}([^>]+)>(.*?)(?:{}|$)", function_start, function_end);
-    let parameter_pattern = format!(
-        r"(?s){}([^>]+)>(.*?)(?:{}|$)",
-        parameter_start, parameter_end
-    );
+    // Strict-match families (e.g. minimax_m2 per its reference parser) require
+    // paired fences for every level — drop the `|$` end-of-block fallback so
+    // missing `</invoke>` / `</parameter>` causes no match rather than a
+    // recovered call. Lenient families keep the fallback for the historical
+    // best-effort behavior.
+    let (function_pattern, parameter_pattern) = if config.strict_match {
+        (
+            format!(r"(?s){}([^>]+)>(.*?){}", function_start, function_end),
+            format!(r"(?s){}([^>]+)>(.*?){}", parameter_start, parameter_end),
+        )
+    } else {
+        (
+            format!(r"(?s){}([^>]+)>(.*?)(?:{}|$)", function_start, function_end),
+            format!(
+                r"(?s){}([^>]+)>(.*?)(?:{}|$)",
+                parameter_start, parameter_end
+            ),
+        )
+    };
 
     let function_regex = Regex::new(&function_pattern)?;
     let parameter_regex = Regex::new(&parameter_pattern)?;
@@ -968,8 +1009,14 @@ NYC
         assert_eq!(normal, Some("".to_string()));
     }
 
-    #[test] // PARSER.batch.5 — minimax_m2
-    fn test_parse_minimax_m2_no_outer_close_recovers() {
+    #[test] // PARSER.batch.5.a — minimax_m2 spec-strict
+    fn test_parse_minimax_m2_no_outer_close_drops_call() {
+        // MiniMax-M2's reference parser (huggingface.co/MiniMaxAI/MiniMax-M2)
+        // requires both outer fences — missing `</minimax:tool_call>` means
+        // the regex does not match and zero calls are recovered. Strict-match
+        // mode opts into that behavior even when `allow_eof_recovery=true`
+        // would otherwise apply (and the binding-layer override is also
+        // suppressed for strict configs).
         let config = XmlParserConfig {
             tool_call_start_token: "<minimax:tool_call>".to_string(),
             tool_call_end_token: "</minimax:tool_call>".to_string(),
@@ -978,14 +1025,17 @@ NYC
             parameter_start_token: "<parameter name=".to_string(),
             parameter_end_token: "</parameter>".to_string(),
             allow_eof_recovery: true,
+            strict_match: true,
+            passthrough_when_no_function: false,
+            backoff_when_no_wrapper: false,
         };
         let input = r#"<minimax:tool_call><invoke name="get_weather"><parameter name="city">NYC</parameter></invoke>"#;
 
         let (calls, _) = try_tool_call_parse_xml(input, &config, None).unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].function.name, "get_weather");
-        let args: serde_json::Value = serde_json::from_str(&calls[0].function.arguments).unwrap();
-        assert_eq!(args["city"], "NYC");
+        assert!(
+            calls.is_empty(),
+            "strict_match config must not recover when outer </minimax:tool_call> is absent"
+        );
     }
 
     #[test] // helper
@@ -1171,10 +1221,8 @@ NYC
     }
 
     /// Helper for the new corner-case tests below (PARSER.batch.6 / PIPELINE.finish_reason / PARSER.batch.9
-    /// / PARSER.batch.10) — `allow_eof_recovery: false` because none of these tests
-    /// rely on EOF recovery. The inline config in
-    /// `test_parse_minimax_m2_no_outer_close_recovers` keeps that flag `true`
-    /// because that test specifically exercises the recovery path.
+    /// / PARSER.batch.10) — matches the production `ToolCallConfig::minimax_m2()`
+    /// factory: strict-match per MiniMax's reference parser.
     fn minimax_m2_config() -> XmlParserConfig {
         XmlParserConfig {
             tool_call_start_token: "<minimax:tool_call>".to_string(),
@@ -1184,6 +1232,9 @@ NYC
             parameter_start_token: "<parameter name=".to_string(),
             parameter_end_token: "</parameter>".to_string(),
             allow_eof_recovery: false,
+            strict_match: true,
+            passthrough_when_no_function: false,
+            backoff_when_no_wrapper: false,
         }
     }
 
