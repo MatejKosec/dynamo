@@ -44,7 +44,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ' Let me know if you need more.'
-    # TODO(research): vllm diverges — vLLM returns null normal_text where Dynamo surfaces the trailing narration.
+    # TODO(research): vllm diverges — TODO(research): vLLM returns null normal_text where Dynamo surfaces the narration string
     # vllm produces:
     #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}]
     #   normal_text: None
@@ -65,7 +65,7 @@ cases:
         arguments:
           location: NYC
       normal_text: I will check the weather.  Let me know if you need more.
-    # TODO(research): vllm diverges — vLLM drops trailing narration after the wrapper end, only surfaces prefix.
+    # TODO(research): vllm diverges — TODO(research): vLLM returns null normal_text where Dynamo surfaces the narration string
     # vllm produces:
     #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}]
     #   normal_text: 'I will check the weather. '
@@ -93,7 +93,7 @@ cases:
         arguments:
           location: LA
       normal_text: 'I will check the weather.  Then check LA weather. '
-    # TODO(research): vllm diverges — vLLM drops inter-call and trailing narration, only surfaces prefix.
+    # TODO(research): vllm diverges — TODO(research): vLLM returns null normal_text where Dynamo surfaces the narration string
     # vllm produces:
     #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}, {'name': 'get_weather', 'arguments': {'location': 'LA'}}]
     #   normal_text: 'I will check the weather. '

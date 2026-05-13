@@ -23,9 +23,9 @@ cases:
       calls:
       - name: book_flight
         arguments:
+          destination: Paris
           passengers: 2
           first_class: true
-          destination: Paris
       normal_text: ''
   PARSER.batch.7.b:
     description: Unicode + escaped chars
@@ -78,12 +78,12 @@ cases:
       calls:
       - name: process_data
         arguments:
-          config:
-            nested: true
           items:
           - 1
           - 2
           - 3
+          config:
+            nested: true
       normal_text: ''
     # TODO(research): vllm diverges — vLLM emits JSON-typed parameter values as raw strings; Dynamo coerces nested object/array types
     # vllm produces:

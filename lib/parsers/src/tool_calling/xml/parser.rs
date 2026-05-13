@@ -37,6 +37,10 @@ pub fn detect_tool_call_start_xml(chunk: &str, config: &XmlParserConfig) -> bool
         return true;
     }
 
+    if config.backoff_when_no_wrapper && chunk.contains(config.function_start_token.as_str()) {
+        return true;
+    }
+
     // Check for partial match at the end of the chunk (for streaming).
     for i in 1..start_token.len() {
         if chunk.ends_with(&start_token[..i]) {

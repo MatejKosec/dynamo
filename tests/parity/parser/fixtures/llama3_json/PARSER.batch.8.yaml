@@ -24,7 +24,8 @@ cases:
       normal_text: I will check the weather.
     # TODO(research): vllm diverges — TODO(research): vLLM returns null normal_text where Dynamo surfaces the narration string
     # vllm produces:
-    #   error: AttributeError: '_StubTokenizer' object has no attribute 'encode'
+    #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}]
+    #   normal_text: None
   PARSER.batch.8.b:
     description: Narration after tool call only
     ref: dynamo
@@ -52,7 +53,8 @@ cases:
       normal_text: I will check the weather.
     # TODO(research): vllm diverges — TODO(research): vLLM returns null normal_text where Dynamo surfaces the narration string
     # vllm produces:
-    #   error: AttributeError: '_StubTokenizer' object has no attribute 'encode'
+    #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}]
+    #   normal_text: None
   PARSER.batch.8.d:
     description: Narration between multiple tool calls
     ref: dynamo
@@ -71,4 +73,5 @@ cases:
       normal_text: I will check the weather.
     # TODO(research): vllm diverges — TODO(research): vLLM returns null normal_text where Dynamo surfaces the narration string
     # vllm produces:
-    #   error: AttributeError: '_StubTokenizer' object has no attribute 'encode'
+    #   calls: [{'name': 'get_weather', 'arguments': {'location': 'NYC'}}, {'name': 'get_weather', 'arguments': {'location': 'LA'}}]
+    #   normal_text: None
