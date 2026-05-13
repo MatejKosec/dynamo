@@ -116,7 +116,15 @@ pub fn try_tool_call_parse_xml(
     {
         let calls = parse_tool_call_block(message, config, tools).unwrap_or_default();
         if !calls.is_empty() {
-            return Ok((calls, Some(String::new())));
+            // Preserve the prefix text before the first `<function=...>`
+            // tag — matches the wrapped path's normal_text-preservation
+            // behavior. Without this, narration before a bare `<function=`
+            // tag would be dropped (dynamo-ops finding 2026-05-12).
+            let prefix = message
+                .split_once(config.function_start_token.as_str())
+                .map(|(p, _)| p.to_string())
+                .unwrap_or_default();
+            return Ok((calls, Some(prefix)));
         }
     }
 
