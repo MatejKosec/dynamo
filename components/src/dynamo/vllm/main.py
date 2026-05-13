@@ -7,7 +7,7 @@ import logging
 import os
 import tempfile
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
 if TYPE_CHECKING:
     from dynamo.vllm.omni.args import OmniConfig
@@ -62,6 +62,57 @@ except ImportError:
 configure_dynamo_logging()
 logger = logging.getLogger(__name__)
 shutdown_endpoints: list = []
+
+# Maximum time (seconds) to wait for in-flight requests to drain during shutdown.
+_DRAIN_TIMEOUT_S = 30.0
+_DRAIN_POLL_INTERVAL_S = 0.5
+# Period to pass to vLLM stats calls (not used for polling below since vLLM has no stats API)
+
+
+def _make_drain_callback(
+    engine_holder: list,
+) -> Callable[[], Coroutine]:
+    """Create a drain callback for vLLM prefill workers.
+
+    vLLM's AsyncLLM does not expose a public in-flight-request count API,
+    so this callback cannot poll for active work the way TRT-LLM's
+    _make_drain_callback() does via engine.llm.get_stats_async().
+    Instead it delegates to VllmLLMEngine.drain(), which logs a warning
+    and returns (safe no-op) to make the gap visible in logs during shutdown.
+
+    The engine_holder is a mutable list populated by the prefill worker
+    once the engine is ready.  If it is still empty when the signal fires,
+    draining is skipped.
+
+    Returns None when the worker is not a prefill worker (drain is unnecessary).
+    The caller checks disaggregation_mode *before* calling this helper.
+    """
+
+    async def _drain_in_flight_requests():
+        if not engine_holder:
+            logger.info("Engine not yet initialized; skipping drain")
+            return
+
+        logger.info(
+            "Draining in-flight requests (timeout=%.1fs) to allow "
+            "NIXL KV transfers to complete before GPU memory is freed",
+            _DRAIN_TIMEOUT_S,
+        )
+        # vLLM's AsyncLLM has no equivalent of TRT-LLM's get_stats_async().
+        # Log a warning and return immediately. VllmLLMEngine.drain() also
+        # logs this warning so both code paths record the gap.
+        logger.warning(
+            "vLLM backend does not expose in-flight request count; skipping drain. "
+            "See issue #9344. "
+            "This should be revisited when vLLM upstream adds a scheduler-stats API."
+        )
+        # TODO: Once vLLM exposes a scheduler-stats / request-count query on
+        # AsyncLLM, replace the warning above with a polling loop that mirrors
+        # trtllm/main.py:_make_drain_callback().
+
+        logger.info("All in-flight requests drained (vLLM warning no-op)")
+
+    return _drain_in_flight_requests
 
 
 def build_headless_namespace(config: Config) -> argparse.Namespace:

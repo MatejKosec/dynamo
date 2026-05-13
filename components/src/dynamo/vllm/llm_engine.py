@@ -164,6 +164,29 @@ class VllmLLMEngine(LLMEngine):
             await self.engine_client.abort(request_id)
             logger.debug("Aborted request %s", request_id)
 
+    async def drain(self) -> None:
+        """Drain in-flight engine work before cleanup.
+
+        vLLM's AsyncLLM does not expose a public scheduler-stats query API
+        through which in-flight request counts can be polled.  Unlike
+        TRT-LLM (which can call ``engine.llm.get_stats_async()``), vLLM v1
+        has no equivalent mechanism in its public Python API.  This makes a
+        proper drain impossible without an upstream vLLM change.
+
+        This override logs a warning to record that draining is being skipped
+        so that the gap is visible in logs during shutdown rather than
+        silently disappearing into the base-class no-op.
+
+        Revisit when vLLM upstream adds a scheduler-stats / request-count
+        query API to AsyncLLM.
+        """
+        logger.warning(
+            "vLLM backend does not expose in-flight request count; skipping drain. "
+            "Prefill worker may tear down NixlConnector while a decode peer is mid NIXL-pull. "
+            "See issue #7319 for context. "
+            "This should be revisited when vLLM upstream adds a scheduler-stats API."
+        )
+
     async def cleanup(self) -> None:
         try:
             if self.engine_client is not None:

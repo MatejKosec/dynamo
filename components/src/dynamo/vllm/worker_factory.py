@@ -133,6 +133,7 @@ class WorkerFactory:
         shutdown_event: asyncio.Event,
         shutdown_endpoints: list,
         snapshot_engine: Optional[EngineSetupResult] = None,
+        engine_holder: Optional[list] = None,
     ) -> None:
         """Create the appropriate multimodal worker based on config flags."""
 
@@ -150,6 +151,7 @@ class WorkerFactory:
                 shutdown_event,
                 shutdown_endpoints,
                 snapshot_engine=snapshot_engine,
+                engine_holder=engine_holder,
             )
         else:
             # AGGREGATED or DECODE
@@ -481,6 +483,7 @@ class WorkerFactory:
         shutdown_event: asyncio.Event,
         shutdown_endpoints: list,  # mutated in place
         snapshot_engine: Optional[EngineSetupResult] = None,
+        engine_holder: Optional[list] = None,
     ) -> None:
         """
         Instantiate and serve
@@ -516,6 +519,11 @@ class WorkerFactory:
                 _component_gauges,
             ) = self.setup_vllm_engine(config, fpm_worker_id=fpm_worker_id)
         await configure_kv_event_block_size(engine_client, vllm_config)
+
+        # Populate engine_holder so drain_callback can reference the AsyncLLM.
+        # Mirrors the pattern used by TRT-LLM in trtllm/main.py:_make_drain_callback().
+        if engine_holder is not None:
+            engine_holder.append(engine_client)
 
         encode_worker_client = await self._maybe_get_encode_worker_client(
             runtime, config
