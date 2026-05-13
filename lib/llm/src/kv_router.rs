@@ -569,6 +569,7 @@ where
                 pinned_worker,
                 allowed_worker_ids,
                 shared_cache_hits,
+                None, // topology_affinity — wired in PR3b
             )
             .instrument(tracing::info_span!("kv_router.schedule"))
             .await?;

@@ -142,6 +142,7 @@ where
         pinned_worker: Option<WorkerWithDpRank>,
         allowed_worker_ids: Option<HashSet<WorkerId>>,
         shared_cache_hits: Option<SharedCacheHits>,
+        topology_affinity: Option<String>,
     ) -> Result<SchedulingResponse, KvSchedulerError> {
         let response = self
             .inner
@@ -160,6 +161,7 @@ where
                 pinned_worker,
                 allowed_worker_ids,
                 shared_cache_hits,
+                topology_affinity,
             )
             .await;
         ROUTER_QUEUE_METRICS.set_pending(self.worker_type(), self.pending_count());

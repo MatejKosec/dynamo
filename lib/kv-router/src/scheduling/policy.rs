@@ -149,6 +149,7 @@ mod tests {
             pinned_worker: None,
             allowed_worker_ids: None,
             shared_cache_hits: None,
+            topology_affinity: None,
             resp_tx: None,
         }
     }

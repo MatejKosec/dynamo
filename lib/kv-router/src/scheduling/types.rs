@@ -33,6 +33,9 @@ pub enum KvSchedulerError {
     #[error("pinned worker {worker_id} is not in allowed worker set")]
     PinnedWorkerNotAllowed { worker_id: WorkerId },
 
+    #[error("no workers in topology domain {domain}={affinity} (policy: fail)")]
+    TopologyNoMatch { domain: String, affinity: String },
+
     #[error("endpoint subscriber shutdown")]
     SubscriberShutdown,
 
@@ -61,6 +64,11 @@ pub struct SchedulingRequest {
     pub router_config_override: Option<RouterConfigOverride>,
     pub track_prefill_tokens: bool,
     pub priority_jump: f64,
+
+    /// Topology affinity value for constraining decode worker selection.
+    /// When set, only workers whose topology_domains[configured_domain] matches
+    /// this value are eligible for selection.
+    pub topology_affinity: Option<String>,
 
     // Overlap and cache signals.
     pub tier_overlap_blocks: TierOverlapBlocks,

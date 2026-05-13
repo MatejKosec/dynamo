@@ -253,6 +253,7 @@ impl KvReplayRouter {
                 None,
                 None,
                 None,
+                None, // topology_affinity
             )
             .await?;
         usize::try_from(response.best_worker.worker_id)
