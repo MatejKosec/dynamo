@@ -666,6 +666,15 @@ async def register_vllm_model(
     runtime_config.data_parallel_start_rank = dp_range[0]
     runtime_config.data_parallel_size = dp_range[1]
 
+    # Set topology and KV transfer policy for topology-aware routing
+    from dynamo.common.utils.topology import read_topology_config
+
+    topo_config = read_topology_config()
+    if topo_config.enabled:
+        runtime_config.topology_domains = topo_config.topology_domains
+        runtime_config.kv_transfer_domain = topo_config.kv_transfer_domain
+        runtime_config.kv_transfer_no_match_policy = topo_config.kv_transfer_no_match_policy
+
     # Configure media decoder for frontend image decoding when enabled
     # This enables frontend to decode images and transfer via NIXL RDMA
     media_decoder = None

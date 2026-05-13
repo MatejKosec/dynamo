@@ -182,4 +182,44 @@ impl ModelRuntimeConfig {
     fn enable_eagle(&self) -> bool {
         self.inner.enable_eagle
     }
+
+    #[getter]
+    fn topology_domains(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let dict = PyDict::new(py);
+        for (key, value) in &self.inner.topology_domains {
+            dict.set_item(key, value)?;
+        }
+        Ok(dict.into())
+    }
+
+    #[setter]
+    fn set_topology_domains(&mut self, topology_domains: &Bound<'_, PyDict>) -> PyResult<()> {
+        self.inner.topology_domains.clear();
+        for (key, value) in topology_domains.iter() {
+            let key_str: String = key.extract()?;
+            let value_str: String = value.extract()?;
+            self.inner.topology_domains.insert(key_str, value_str);
+        }
+        Ok(())
+    }
+
+    #[getter]
+    fn kv_transfer_domain(&self) -> Option<String> {
+        self.inner.kv_transfer_domain.clone()
+    }
+
+    #[setter]
+    fn set_kv_transfer_domain(&mut self, kv_transfer_domain: Option<String>) {
+        self.inner.kv_transfer_domain = kv_transfer_domain;
+    }
+
+    #[getter]
+    fn kv_transfer_no_match_policy(&self) -> Option<String> {
+        self.inner.kv_transfer_no_match_policy.clone()
+    }
+
+    #[setter]
+    fn set_kv_transfer_no_match_policy(&mut self, kv_transfer_no_match_policy: Option<String>) {
+        self.inner.kv_transfer_no_match_policy = kv_transfer_no_match_policy;
+    }
 }
