@@ -378,6 +378,14 @@ func generateSingleDCD(
 
 	applyDGDTemplateDefaults(&deployment.Spec.DynamoComponentDeploymentSharedSpec, parentDGD)
 
+	// Topology label controller marker: set on the DCD so it propagates to pods
+	if parentDGD.Spec.KvTransferPolicy != nil && IsWorkerComponent(string(component.ComponentType)) {
+		if deployment.Annotations == nil {
+			deployment.Annotations = make(map[string]string)
+		}
+		deployment.Annotations[commonconsts.KubeAnnotationTopologyLabelKey] = parentDGD.Spec.KvTransferPolicy.LabelKey
+	}
+
 	// Apply restart annotation if this component should be restarted.
 	if restartState.ShouldAnnotateComponent(componentName) {
 		podTemplate := ensurePodTemplate(&deployment.Spec.DynamoComponentDeploymentSharedSpec)
@@ -1775,6 +1783,8 @@ func applyDGDTemplateDefaults(
 		main.Env = MergeEnvs(WorkerTopologyEnvVars(kvt), main.Env)
 		main.VolumeMounts = append(main.VolumeMounts, TopologyLabelVolumeMount())
 		podTemplate.Spec.Volumes = appendVolumeIfAbsent(podTemplate.Spec.Volumes, TopologyLabelVolume(kvt))
+		// Marker annotation for the topology label controller to copy the node label
+		podTemplate.Annotations[commonconsts.KubeAnnotationTopologyLabelKey] = kvt.LabelKey
 	}
 
 	propagateDGDAnnotations(dynamoDeployment.GetAnnotations(), component)

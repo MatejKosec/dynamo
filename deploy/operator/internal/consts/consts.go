@@ -88,6 +88,12 @@ const (
 	EnvTopologyEnabled = "DYN_TOPOLOGY_ENABLED"
 	EnvTopologyPrefix  = "DYN_TOPOLOGY_"
 
+	// KubeAnnotationTopologyLabelKey is set on worker pod templates when
+	// kvTransferPolicy.labelKey is configured. The topology label controller
+	// watches for pods with this annotation and copies the corresponding node
+	// label onto the pod after scheduling.
+	KubeAnnotationTopologyLabelKey = "nvidia.com/topology-label-key"
+
 	DynamoDeploymentConfigEnvVar      = "DYN_DEPLOYMENT_CONFIG"
 	DynamoNamespaceEnvVar             = "DYN_NAMESPACE"
 	DynamoNamespacePrefixEnvVar       = "DYN_NAMESPACE_PREFIX"
