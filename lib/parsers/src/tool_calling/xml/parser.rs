@@ -58,8 +58,19 @@ pub fn detect_tool_call_start_xml(chunk: &str, config: &XmlParserConfig) -> bool
 /// as a single jailed region.  Returns the position after the last `</tool_call>`
 /// found, or the length of the chunk when no end token is present.
 pub fn find_tool_call_end_position_xml(chunk: &str, config: &XmlParserConfig) -> usize {
-    let start_token = &config.tool_call_start_token;
-    let end_token = &config.tool_call_end_token;
+    // Symmetry with `detect_tool_call_start_xml` + `try_tool_call_parse_xml`'s
+    // back-off branch: when the family allows `<function=...>` without an outer
+    // `<tool_call>` wrapper (qwen3_coder, nemotron_nano), terminate on
+    // `</function>` so the streaming jail can release content as soon as the
+    // bare-function block closes rather than buffering to EOS.
+    let in_backoff = config.backoff_when_no_wrapper
+        && !chunk.contains(config.tool_call_start_token.as_str())
+        && chunk.contains(config.function_start_token.as_str());
+    let (start_token, end_token) = if in_backoff {
+        (&config.function_start_token, &config.function_end_token)
+    } else {
+        (&config.tool_call_start_token, &config.tool_call_end_token)
+    };
 
     // Find the first end token — if there isn't one, the call is incomplete.
     let Some(first_end) = chunk.find(end_token.as_str()) else {
