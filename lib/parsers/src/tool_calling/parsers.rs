@@ -146,10 +146,8 @@ pub async fn detect_and_parse_tool_call_with_recovery(
         }
         ParserConfig::Xml(c) => {
             let mut c = c.clone();
-            // Strict-match families (per their reference parser) opt out of
-            // the finalize-time EOF-recovery override — e.g. minimax_m2's
-            // outer regex requires both fences, so we must not silently flip
-            // recovery back on at the binding layer.
+            // Strict-match families opt out — flipping recovery here would
+            // contradict their per-spec strictness.
             if !c.strict_match {
                 c.allow_eof_recovery = true;
             }

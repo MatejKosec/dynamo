@@ -14,6 +14,20 @@ use super::super::ToolDefinition;
 use super::super::config::XmlParserConfig;
 use super::response::{CalledFunction, ToolCallResponse, ToolCallType};
 
+/// Build a `<start>name>(body)<end>` regex pattern. When `strict` is false,
+/// missing `<end>` falls back to end-of-block so truncated input still parses
+/// best-effort. Strict mode requires both fences and returns no match without
+/// the close tag.
+fn build_block_pattern(start: &str, end: &str, strict: bool) -> String {
+    let start = regex::escape(start);
+    let end = regex::escape(end);
+    if strict {
+        format!(r"(?s){}([^>]+)>(.*?){}", start, end)
+    } else {
+        format!(r"(?s){}([^>]+)>(.*?)(?:{}|$)", start, end)
+    }
+}
+
 /// Strip surrounding quotes from a string if present
 fn strip_quotes(s: &str) -> &str {
     let trimmed = s.trim();
@@ -114,21 +128,14 @@ pub fn try_tool_call_parse_xml(
         return Ok((vec![], Some(message.to_string())));
     }
 
-    // Qwen3-Coder-style back-off: outer `<tool_call>` wrapper missing but
-    // `<function=...>` tags are present in the body. The reference parser
-    // treats the whole input as a single tool-call block (see
-    // qwen3coder_tool_parser._get_function_calls's `raw_tool_calls =
-    // [model_output]` fallback). Only attempt this when the family opts in.
-    if config.backoff_when_no_wrapper
-        && !message.contains(config.tool_call_start_token.as_str())
-        && message.contains(config.function_start_token.as_str())
-    {
+    // Qwen3-Coder-style back-off: outer wrapper missing but `<function=...>`
+    // tags are present — parse the whole input as a single tool-call block
+    // (mirrors `qwen3coder_tool_parser._get_function_calls`'s fallback).
+    if config.is_bare_function_mode(message) {
         let calls = parse_tool_call_block(message, config, tools).unwrap_or_default();
         if !calls.is_empty() {
-            // Preserve the prefix text before the first `<function=...>`
-            // tag — matches the wrapped path's normal_text-preservation
-            // behavior. Without this, narration before a bare `<function=`
-            // tag would be dropped (dynamo-ops finding 2026-05-12).
+            // Preserve narration before the first `<function=...>` tag so
+            // streaming output isn't dropped on the back-off path.
             let prefix = message
                 .split_once(config.function_start_token.as_str())
                 .map(|(p, _)| p.to_string())
@@ -233,34 +240,18 @@ fn parse_tool_call_block(
     config: &XmlParserConfig,
     tools: Option<&[ToolDefinition]>,
 ) -> anyhow::Result<Vec<ToolCallResponse>> {
-    // Build regex patterns based on config
-    let function_start = regex::escape(&config.function_start_token);
-    let function_end = regex::escape(&config.function_end_token);
-    let parameter_start = regex::escape(&config.parameter_start_token);
-    let parameter_end = regex::escape(&config.parameter_end_token);
-
-    // Strict-match families (e.g. minimax_m2 per its reference parser) require
-    // paired fences for every level — drop the `|$` end-of-block fallback so
-    // missing `</invoke>` / `</parameter>` causes no match rather than a
-    // recovered call. Lenient families keep the fallback for the historical
-    // best-effort behavior.
-    let (function_pattern, parameter_pattern) = if config.strict_match {
-        (
-            format!(r"(?s){}([^>]+)>(.*?){}", function_start, function_end),
-            format!(r"(?s){}([^>]+)>(.*?){}", parameter_start, parameter_end),
-        )
-    } else {
-        (
-            format!(r"(?s){}([^>]+)>(.*?)(?:{}|$)", function_start, function_end),
-            format!(
-                r"(?s){}([^>]+)>(.*?)(?:{}|$)",
-                parameter_start, parameter_end
-            ),
-        )
-    };
-
-    let function_regex = Regex::new(&function_pattern)?;
-    let parameter_regex = Regex::new(&parameter_pattern)?;
+    // Strict-match families (e.g. minimax_m2) require paired fences; lenient
+    // families fall back to end-of-block when the close tag is missing.
+    let function_regex = Regex::new(&build_block_pattern(
+        &config.function_start_token,
+        &config.function_end_token,
+        config.strict_match,
+    ))?;
+    let parameter_regex = Regex::new(&build_block_pattern(
+        &config.parameter_start_token,
+        &config.parameter_end_token,
+        config.strict_match,
+    ))?;
 
     let mut results = Vec::new();
 
