@@ -29,15 +29,12 @@ fn strip_quotes(s: &str) -> &str {
 /// Check if a chunk contains the start of a xml-style tool call.
 /// Format: `<tool_call><function=name><parameter=foo>...</parameter></function></tool_call>`
 pub fn detect_tool_call_start_xml(chunk: &str, config: &XmlParserConfig) -> bool {
-    // Check for complete or partial start token.
     let start_token = &config.tool_call_start_token;
 
-    // Check if we have the complete start token.
-    if chunk.contains(start_token.as_str()) {
-        return true;
-    }
-
-    if config.backoff_when_no_wrapper && chunk.contains(config.function_start_token.as_str()) {
+    // Complete start token, or bare `<function=...>` in back-off mode (the
+    // batch path treats both as tool-call starts; the streaming jail must
+    // agree — see XmlParserConfig::is_bare_function_mode).
+    if chunk.contains(start_token.as_str()) || config.is_bare_function_mode(chunk) {
         return true;
     }
 
@@ -57,16 +54,13 @@ pub fn detect_tool_call_start_xml(chunk: &str, config: &XmlParserConfig) -> bool
 /// advances past every consecutive start→end pair so the entire group is captured
 /// as a single jailed region.  Returns the position after the last `</tool_call>`
 /// found, or the length of the chunk when no end token is present.
+///
+/// In back-off mode (see XmlParserConfig::is_bare_function_mode) the
+/// function-level tokens act as the boundary so the jail releases at
+/// `</function>` instead of buffering to EOS waiting for a missing
+/// `</tool_call>`.
 pub fn find_tool_call_end_position_xml(chunk: &str, config: &XmlParserConfig) -> usize {
-    // Symmetry with `detect_tool_call_start_xml` + `try_tool_call_parse_xml`'s
-    // back-off branch: when the family allows `<function=...>` without an outer
-    // `<tool_call>` wrapper (qwen3_coder, nemotron_nano), terminate on
-    // `</function>` so the streaming jail can release content as soon as the
-    // bare-function block closes rather than buffering to EOS.
-    let in_backoff = config.backoff_when_no_wrapper
-        && !chunk.contains(config.tool_call_start_token.as_str())
-        && chunk.contains(config.function_start_token.as_str());
-    let (start_token, end_token) = if in_backoff {
+    let (start_token, end_token) = if config.is_bare_function_mode(chunk) {
         (&config.function_start_token, &config.function_end_token)
     } else {
         (&config.tool_call_start_token, &config.tool_call_end_token)

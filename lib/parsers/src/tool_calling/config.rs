@@ -124,6 +124,20 @@ impl Default for XmlParserConfig {
     }
 }
 
+impl XmlParserConfig {
+    /// Returns true when the chunk lacks the outer `<tool_call>` wrapper but
+    /// contains `<function=...>`, and the family opts into back-off parsing
+    /// (qwen3_coder, nemotron_nano). In this mode the function-level tokens
+    /// act as the tool-call boundary for both start detection and end-position
+    /// search, mirroring the wrapped path's behavior so streaming and batch
+    /// agree on what counts as a tool call.
+    pub fn is_bare_function_mode(&self, chunk: &str) -> bool {
+        self.backoff_when_no_wrapper
+            && !chunk.contains(self.tool_call_start_token.as_str())
+            && chunk.contains(self.function_start_token.as_str())
+    }
+}
+
 /// Configuration for DSML-style tool call parser (DeepSeek V3.2+)
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DsmlParserConfig {
